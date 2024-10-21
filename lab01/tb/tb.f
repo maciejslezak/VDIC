@@ -1,2 +1,2 @@
--F ../../common/tinyalu/tinyalu.f
-tinyalu_tb.sv
+../../common/fifomult2024.svp
+fifomult2024_tb.sv
