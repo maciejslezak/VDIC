@@ -1,0 +1,166 @@
+/******************************************************************************
+ * (C) Copyright 2024 AGH UST All Rights Reserved
+ ******************************************************************************
+ * MODULE NAME: fifomult2024
+ * VERSION:     1.0
+ * DATE:        04-10-2024
+ *
+ * ABSTRACT:   DUT module for VDIC 2024 labs.
+ *             The DUT is signed 16-bit integer multiplier with input fifo
+ *******************************************************************************
+ * HISTORY:
+ * 04-10-2024 v1.0 Initial version
+ * 
+ *******************************************************************************
+ * INPUTS
+ *    clk             - posedge active clock, always running
+ *    rst_n           - synchronous reset active low
+ *    data_in [15:0]  - multiplicand, signed 16-bit integer
+ *    data_in_parity  - partity for the data_in (even parity)
+ *    data_in_valid   - request to latch the input data
+
+ * OUTPUTS
+ *    busy_out        - flag to show the multiplier input fifo is full
+ *                      0 - the multiplier accepts the data
+ *                      1 - the multiplier ignores the input data
+ *    data_out [31:0] - product, 32-bit signed integer
+ *    data_out_parity - parity bit for the data_out (even parity)
+ *    data_out_valid  - request to latch the output data
+ *    data_in_parity_error - flags incorrect parity of one of the arguments
+ *
+ *******************************************************************************
+
+ The clock is always active.
+ The module operates at the posedge of the clock.
+
+ --------------------------------------------------------------------------------
+ --- Data processing
+ --------------------------------------------------------------------------------
+
+ 1. To multiply two numbers:
+    - check that busy_out is low
+    - set data_in to the first multiplicand and assert data_in_valid for 1 clock cycle
+      (and set the data_in_parity accordingly);
+    - check that busy_out is low
+    - set data_in to the second multiplicand and assert data_in_valid for 1 clock cycle
+      (and set the data_in_parity accordingly);
+ 3. The multiplier latches the data immediately
+ 4. The multiplier will take a variable number of clock cycles to process.
+ 5. The output data will be ready for one clock cycle, when data_out_valid flag is high.
+ 6. When the input data has parity error(s), the data_in_parity_error output will be
+    set together with data_out_valid. The result will be equeal to 0 in this case.
+
+ --------------------------------------------------------------------------------
+ */
+module fifomult2024 (
+    input  wire                clk,                 // posedge active clock
+    input  wire                rst_n,               // async reset active low
+    input  wire  signed [15:0] data_in,             // input data
+    input  wire                data_in_parity,      // input data parity bit
+    input  wire                data_in_valid,       // input data valid flag
+    output logic               busy_out,            // set to 1 when processing the data (not accepting new data)
+    output logic signed [31:0] data_out,            // output data
+    output logic               data_out_parity,     // output data parity bit
+    output logic               data_out_valid,      // output data valid flag
+    output logic               data_in_parity_error // 1 when input data had a parity error; valid with data_out valid
+);
+
+//pragma protect begin_protected
+//pragma protect encrypt_agent="NCPROTECT"
+//pragma protect encrypt_agent_info="Encrypted using API"
+//pragma protect key_keyowner=Cadence Design Systems.
+//pragma protect key_keyname=prv(CDS_RSA_KEY_VER_2)
+//pragma protect key_method=RSA
+//pragma protect key_block
+AZNkdPhcf0dN9XwNz38kaBHgE6ly1XsXmH2FFiZJbdwoSiQ9/FkhWvyv+gkNlq2C
+Za+knZnKylUppCqeFCH5gRq86mxJl+CEuYk88ca9njIfxLiRG892R85K8cipjRNu
+OM0u3G7DlqhVpNTGQtIk2fWZF4MHwckb43gmICUC28zNr/pT6nHyt22evoZyNH7q
+6bwwr2brzcsg6FKExf6ZC+7tOrMQZp8lMqHBIVa59QFjJ/bAbzsWOe6Vq7cp9Rpn
+CDR8d7goeOqwfY7uN3/rqeGKttpTCwCUgva9V8Gz6gxJdvfalM8GUi+IidsOBKM+
+0H+X9DxX+MYc9hH6wnmfFQ==
+//pragma protect end_key_block
+//pragma protect digest_block
+/MFKj7Jxq5nCRJuVv4Xv6bxIqYI=
+//pragma protect end_digest_block
+//pragma protect data_block
+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
+//pragma protect end_data_block
+//pragma protect digest_block
+1dlpsc//PxrH6Fe5ipIW9e0vbXk=
+//pragma protect end_digest_block
+//pragma protect end_protected
+
+endmodule
