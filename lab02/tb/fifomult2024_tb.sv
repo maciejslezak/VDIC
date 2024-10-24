@@ -31,6 +31,13 @@ module top;
 		bit               B_parity;		
 	} st_data_in_packet_t;
 	
+	typedef enum bit [1:0] {
+		A_B_INCORRECT = 2'b00,
+		A_INCORRECT   = 2'b01,
+		B_INCORRECT   = 2'b10,
+		CORRECT       = 2'b11
+	} parity_corr_t;
+	
 	typedef enum bit {
 		mul_op = 1'b0,
 		rst_op = 1'b1
@@ -73,9 +80,10 @@ module top;
 	// testbench data in signals
 	st_data_in_packet_t data_in_packet;
 	
-	// testbench control signals
-	//operation_t       op;
+	// testbench control variables
+	operation_t       op_set;
 	test_result_t     test_result = TEST_PASSED;
+	parity_corr_t     parity_corr;
 
 //------------------------------------------------------------------------------
 // DUT instantiation
@@ -83,6 +91,154 @@ module top;
 
 	fifomult2024 DUT (.clk, .rst_n, .data_in, .data_in_parity, .data_in_valid,
 		.busy_out, .data_out, .data_out_parity, .data_out_valid, .data_in_parity_error);
+
+//------------------------------------------------------------------------------
+// Coverage block
+//------------------------------------------------------------------------------
+
+// parity check function
+	function parity_corr_t check_parity_cov (
+			st_data_in_packet_t data_in
+		);
+		
+		automatic bit expected_A_parity = ^data_in.A;
+		automatic bit expected_B_parity = ^data_in.B;
+		
+		if (expected_A_parity == data_in.A_parity &&
+			expected_B_parity == data_in.B_parity) begin
+			return CORRECT;
+		end
+		else if (expected_A_parity != data_in.A_parity &&
+				 expected_B_parity == data_in.B_parity) begin
+			return A_INCORRECT;
+		end
+		else if (expected_A_parity == data_in.A_parity &&
+				 expected_B_parity != data_in.B_parity) begin
+			return B_INCORRECT;
+		end
+		else begin
+			return A_B_INCORRECT;
+		end
+				 
+	endfunction : check_parity_cov
+
+// Covergroup checking the op codes and their sequences
+    covergroup op_cov;
+
+        option.name = "cg_op_cov";
+
+        coverpoint op_set {
+            // #A1 test mult operation
+            bins A1_mul  	= {mul_op};
+
+            // #A2 test mult operation after reset
+            bins A2_rst_mul = (rst_op => mul_op);
+
+            // #A3 test reset after mult operation
+            bins A3_mul_rst	= (mul_op => rst_op);
+        }
+
+    endgroup
+
+// Covergroup checking for min, max, all-0 and all-1 values of the inputs
+    covergroup data_in_corners_cov;
+
+        option.name = "cg_data_in_corners_cov";
+
+        a_leg: coverpoint data_in_packet.A {
+	        bins min    = {16'sh8000};
+            bins zeros  = {16'sh0000};
+            bins ones   = {16'shFFFF};
+	        bins max    = {16'sh7FFF};
+            bins others = default;
+        }
+
+        b_leg: coverpoint data_in_packet.B {
+	        bins min    = {16'sh8000};
+            bins zeros  = {16'sh0000};
+            bins ones   = {16'shFFFF};
+	        bins max    = {16'sh7FFF};
+            bins others = default;
+        }
+
+        B_A_B: cross a_leg, b_leg {
+
+            // #B1 Simulate multiplication of minimum values
+            bins B1	= binsof (a_leg.min) && binsof (b_leg.min);
+
+            // #B2 Simulate multiplication of maximum values
+            bins B2	= binsof (a_leg.max) && binsof (b_leg.max);
+	        
+            // #B3 Simulate multiplication of minimum value as first input and maximum value as second input
+            bins B3	= binsof (a_leg.min) && binsof (b_leg.max);
+	        
+            // #B4 Simulate multiplication of maximum value as first input and minimum value as second input
+            bins B4	= binsof (a_leg.max) && binsof (b_leg.min);
+	        
+            // #B5 Simulate all zeroes as inputs
+            bins B5	= binsof (a_leg.zeros) && binsof (b_leg.zeros);
+	        
+            // #B6 Simulate all ones as inputs
+            bins B6	= binsof (a_leg.ones) && binsof (b_leg.ones);
+
+        }
+
+    endgroup
+
+// Covergroup checking for min, max, all-0 and all-1 values of the inputs
+    covergroup parity_cov;
+	    
+	    option.name = "cg_parity_cov";
+	    
+	    // B7 - B10
+	    parity : coverpoint parity_corr;
+	    
+    endgroup
+    
+    op_cov                      oc;
+    data_in_corners_cov         corners_c;
+    parity_cov                  parity_c;
+    
+    bit cov_valid_counter;
+
+    initial begin : coverage
+        oc        = new();
+        corners_c = new();
+	    parity_c  = new();
+	    cov_valid_counter = 1'b0;
+        forever begin : sample_cov
+            @(posedge clk);
+	        priority if (data_in_valid == 1'b1 && cov_valid_counter == 1'b0) begin
+		        // wait for data B to be latched
+	            cov_valid_counter = 1'b1; 
+	        end
+	        else if (data_in_valid == 1'b1 && cov_valid_counter == 1'b1) begin
+	            parity_corr = check_parity_cov(data_in_packet);
+	            oc.sample();
+	            corners_c.sample();
+		        parity_c.sample();
+		        cov_valid_counter = 1'b0;		
+	        end
+	        else begin
+		        cov_valid_counter = cov_valid_counter;
+	        end
+	        
+	        if (rst_n == 1'b0) begin
+		        cov_valid_counter = 1'b0;
+		        oc.sample();
+	        end
+
+                /* #1step delay is necessary before checking for the coverage
+                 * as the .sample methods run in parallel threads
+                 */
+                #1step;
+                if($get_coverage() == 100) break; //disable, if needed
+
+                // you can print the coverage after each sample
+//            $strobe("%0t coverage: %.4g\%",$time, $get_coverage());
+        end
+    end : coverage
+
 
 //------------------------------------------------------------------------------
 // Clock generator
@@ -185,10 +341,11 @@ module top;
 		reset_dut();
 		
 		/* --- generation loop --- */
-		repeat (1000) begin : tpgen_main_blk
+		repeat (10000) begin : tpgen_main_blk
 			
 			/* --- generate data --- */
 			data_in_packet = get_data_in_packet();
+			op_set         = get_op();
 			
 			/* --- latch data in A --- */
 			wait(!busy_out);
@@ -211,7 +368,7 @@ module top;
 			end
 			
 			/* --- handle operation --- */
-			case (get_op())
+			case (op_set)
 				rst_op: begin : case_rst_op_blk
 					/* --- reset dut--- */
 					reset_dut();
@@ -337,23 +494,23 @@ module top;
 // Scoreboard, part 1 command receiver and reference model function
 //-------------------------------------------------------------------
 
-    bit	                   valid_counter = 1'b0;
+    bit	                   sb_valid_counter = 1'b0;
     st_data_in_packet_t    sb_data_q        [$];
 
     always @(posedge clk) begin:scoreboard_fe_blk
-	    
-        priority if (data_in_valid == 1'b1 && valid_counter == 1'b0) begin
-            valid_counter = 1'b1; 
+	    /* sample data only after two consecutive 'valid' signal occurences */
+        priority if (data_in_valid == 1'b1 && sb_valid_counter == 1'b0) begin
+            sb_valid_counter = 1'b1; 
         end
-        else if (data_in_valid == 1'b1 && valid_counter == 1'b1) begin
+        else if (data_in_valid == 1'b1 && sb_valid_counter == 1'b1) begin
             sb_data_q.push_front(data_in_packet);
-	        valid_counter = 1'b0;		
+	        sb_valid_counter = 1'b0;		
         end
         else begin
-	        valid_counter = valid_counter;
+	        sb_valid_counter = sb_valid_counter;
         end
         if (rst_n == 1'b0) begin
-	        valid_counter = 1'b0;
+	        sb_valid_counter = 1'b0;
 	        sb_data_q.delete();
         end
     end
