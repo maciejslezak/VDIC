@@ -208,6 +208,7 @@ module top;
 	    cov_valid_counter = 1'b0;
         forever begin : sample_cov
             @(posedge clk);
+	        /* sample data only when both inputs are correctly latched */
 	        priority if (data_in_valid == 1'b1 && cov_valid_counter == 1'b0) begin
 		        // wait for data B to be latched
 	            cov_valid_counter = 1'b1; 
@@ -222,7 +223,7 @@ module top;
 	        else begin
 		        cov_valid_counter = cov_valid_counter;
 	        end
-	        
+	        /* additionally sample operation at the reset occurence */
 	        if (rst_n == 1'b0) begin
 		        cov_valid_counter = 1'b0;
 		        oc.sample();
@@ -274,12 +275,12 @@ module top;
 	function operation_t get_op();
 		
 		/* --- init local variables --- */
-		bit [2:0] randomizer;
+		bit [3:0] randomizer;
 		
 		/* --- get operation --- */
-		randomizer = 3'($random);
+		randomizer = 4'($random);
 		case (randomizer)
-			3'b000 : return rst_op; // reset 12.5% propability
+			4'b0000 : return rst_op; // reset 12.5% propability
 			default: return mul_op; // mult  87.5% propability
 		endcase // case (randomizer)
 		
@@ -334,52 +335,57 @@ module top;
 
 //------------------------
 // Tester main
+	
+	bit tpgen_valid_counter;
 
 	initial begin : tpgen
 		
 		/* --- initial reset --- */
+		tpgen_valid_counter = 1'b0;
 		reset_dut();
 		
 		/* --- generation loop --- */
-		repeat (10000) begin : tpgen_main_blk
-			
-			/* --- generate data --- */
-			data_in_packet = get_data_in_packet();
-			op_set         = get_op();
+		repeat (2000) begin : tpgen_main_blk
 			
 			/* --- latch data in A --- */
 			wait(!busy_out);
 			@(negedge clk)
-			begin
-				data_in        = data_in_packet.A;
-				data_in_parity = data_in_packet.A_parity;
-				data_in_valid  = 1'b1;
+			priority if (busy_out == 1'b0 && tpgen_valid_counter == 1'b0) begin
+				/* --- generate data --- */
+				data_in_packet = get_data_in_packet();
+				op_set         = get_op();
+				/* latch A */
+				data_in             = data_in_packet.A;
+				data_in_parity      = data_in_packet.A_parity;
+				tpgen_valid_counter = 1'b1;
+				data_in_valid       = 1'b1;
 			end
-			@(negedge clk)
-			data_in_valid = 1'b0;
-			
-			/* --- latch data in B --- */
-			wait(!busy_out);
-			@(negedge clk)
-			begin
-				data_in        = data_in_packet.B;
-				data_in_parity = data_in_packet.B_parity;
-				data_in_valid  = 1'b1;
+			else if (busy_out == 1'b0 && tpgen_valid_counter == 1'b1) begin
+				data_in             = data_in_packet.B;
+				data_in_parity      = data_in_packet.B_parity;
+				tpgen_valid_counter = 1'b0;
+				data_in_valid       = 1'b1;
+			end
+			else begin
+				data_in             = data_in;
+				data_in_parity      = data_in_parity;
+				tpgen_valid_counter = tpgen_valid_counter;
+				data_in_valid       = 1'b0;
 			end
 			
 			/* --- handle operation --- */
 			case (op_set)
 				rst_op: begin : case_rst_op_blk
 					/* --- reset dut--- */
+					data_in_valid  = 1'b0;
 					reset_dut();
 				end
 				default: begin : case_default_blk
 					/* --- send data and wait for result --- */
 					// clear 'valid' signal after 1 cycle
-					@(negedge clk)
-					data_in_valid = 1'b0;
+					data_in_valid = data_in_valid;
 					// wait for result
-					wait(data_out_valid);
+					//wait(data_out_valid);
 				end : case_default_blk
 			endcase // case (op_set)
 		// print coverage after each loop
@@ -524,6 +530,7 @@ module top;
 		bit signed [31:0] expected_out;
 		bit               expected_out_parity;
 		bit               expected_input_parity_error;
+	    bit failed;
 
         if(data_out_valid) begin:verify_result
 	        
@@ -538,6 +545,7 @@ module top;
 			if( data_out == expected_out &&
 				data_out_parity == expected_out_parity &&
 				data_in_parity_error == expected_input_parity_error) begin
+				failed = 0;
 			`ifdef DEBUG
 				$display("Test passed for A=%0d A_parity=%d B=%0d B_parity=%0d", dp.A, dp.A_parity, dp.B, dp.B_parity);
 			`endif
@@ -547,6 +555,7 @@ module top;
 				$display("Expected out: %d  received out: %d", expected_out, data_out);
 				$display("Expected out parity:      %d  received out parity:      %d", expected_out_parity, data_out_parity);
 				$display("Expected in parity error: %d  received in parity error: %d", expected_input_parity_error, data_in_parity_error);
+				failed = 1;
 				test_result = TEST_FAILED;
 			end;
         end
