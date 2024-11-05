@@ -80,8 +80,10 @@ module top;
 	// testbench data in signals
 	st_data_in_packet_t data_in_packet;
 	
-	// testbench signals
-	test_result_t	test_result = TEST_PASSED;
+	// testbench control variables
+	operation_t       op_set;
+	test_result_t     test_result = TEST_PASSED;
+	parity_corr_t     parity_corr;
 
 //------------------------------------------------------------------------------
 // DUT instantiation
@@ -93,10 +95,6 @@ module top;
 //------------------------------------------------------------------------------
 // Coverage block
 //------------------------------------------------------------------------------
-
-// variables
-	operation_t     op_coverage;
-	parity_corr_t	parity_corr;
 
 // parity check function
 	function parity_corr_t check_parity_cov (
@@ -129,7 +127,7 @@ module top;
 
         option.name = "cg_op_cov";
 
-        coverpoint op_coverage {
+        coverpoint op_set {
             // #A1 test mult operation
             bins A1_mul  	= {mul_op};
 
@@ -216,7 +214,6 @@ module top;
 	            cov_valid_counter = 1'b1; 
 	        end
 	        else if (data_in_valid == 1'b1 && cov_valid_counter == 1'b1) begin
-		        op_coverage = mul_op;
 	            parity_corr = check_parity_cov(data_in_packet);
 	            oc.sample();
 	            corners_c.sample();
@@ -228,7 +225,6 @@ module top;
 	        end
 	        /* additionally sample operation at the reset occurence */
 	        if (rst_n == 1'b0) begin
-		        op_coverage = rst_op;
 		        cov_valid_counter = 1'b0;
 		        oc.sample();
 	        end
@@ -339,9 +335,8 @@ module top;
 
 //------------------------
 // Tester main
-
-	operation_t op_tpgen;
-	bit         tpgen_valid_counter;
+	
+	bit tpgen_valid_counter;
 
 	initial begin : tpgen
 		
@@ -358,7 +353,7 @@ module top;
 			priority if (busy_out == 1'b0 && tpgen_valid_counter == 1'b0) begin
 				/* --- generate data --- */
 				data_in_packet = get_data_in_packet();
-				op_tpgen       = get_op();
+				op_set         = get_op();
 				/* latch A */
 				data_in             = data_in_packet.A;
 				data_in_parity      = data_in_packet.A_parity;
@@ -379,7 +374,7 @@ module top;
 			end
 			
 			/* --- handle operation --- */
-			case (op_tpgen)
+			case (op_set)
 				rst_op: begin : case_rst_op_blk
 					/* --- reset dut--- */
 					data_in_valid  = 1'b0;
@@ -505,10 +500,8 @@ module top;
 // Scoreboard, part 1 command receiver and reference model function
 //-------------------------------------------------------------------
 
-// variables
     bit	                   sb_valid_counter = 1'b0;
     st_data_in_packet_t    sb_data_q        [$];
-
 
     always @(posedge clk) begin:scoreboard_fe_blk
 	    /* sample data only after two consecutive 'valid' signal occurences */
