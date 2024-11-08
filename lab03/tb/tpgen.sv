@@ -95,14 +95,11 @@
 
 	initial begin
 		
-		st_data_in_packet_t	idata_in_packet;
-		operation_t         iop_set;
-		
 		bfm.reset_dut();
 		repeat (2000) begin : random_loop
-			iop_set         = get_op();
-			idata_in_packet = get_data_in_packet();
-			bfm.send_data(idata_in_packet, iop_set);
+			bfm.op_set         = get_op();
+			bfm.data_in_packet = get_data_in_packet();
+			bfm.send_data(); // idata_in_packet, iop_set
 		end : random_loop
 		$finish;
 	end // initial begin

@@ -77,11 +77,9 @@ interface fifomult2024_bfm;
 // send data
 //------------------------------------------------------------------------------
 
-	task send_data(input st_data_in_packet_t idata_in_packet, input operation_t iop_set);
+	task send_data();
 		
 		static bit valid_counter = 0;
-		op_set         = iop_set;
-		data_in_packet = idata_in_packet;
 		
 		while (1) begin : sender_loop
 			/* --- latch data in A --- */
@@ -99,6 +97,7 @@ interface fifomult2024_bfm;
 				valid_counter       = 1'b0;
 				data_in_valid       = 1'b1;
 				@(negedge clk);
+				/* exit loop if both multiplicands were sent */
 				break;
 			end
 			else begin
@@ -115,6 +114,7 @@ interface fifomult2024_bfm;
 					data_in_valid  = 1'b0;
 					reset_dut();
 					valid_counter = 1'b0;
+					/* exit loop if reset */
 					break;
 				end
 				default: begin : case_default_blk

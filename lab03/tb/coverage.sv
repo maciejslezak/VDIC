@@ -38,9 +38,7 @@
 // variables  
 //------------------------------------------------------------------------------	 
 
-	bit                 cov_valid_counter;
-	st_data_in_packet_t data_in_packet;
-	operation_t         op_set;
+	bit                 valid_counter;
 	parity_corr_t       parity_corr;
 	
 //------------------------------------------------------------------------------
@@ -82,7 +80,7 @@
 
         option.name = "cg_op_cov";
 
-        coverpoint op_set {
+        coverpoint bfm.op_set {
             // #A1 test mult operation
             bins A1_mul  	= {mul_op};
 
@@ -100,7 +98,7 @@
 
         option.name = "cg_data_in_corners_cov";
 
-        a_leg: coverpoint data_in_packet.A {
+        a_leg: coverpoint bfm.data_in_packet.A {
 	        bins min    = {16'sh8000};
             bins zeros  = {16'sh0000};
             bins ones   = {16'shFFFF};
@@ -108,7 +106,7 @@
             bins others = default;
         }
 
-        b_leg: coverpoint data_in_packet.B {
+        b_leg: coverpoint bfm.data_in_packet.B {
 	        bins min    = {16'sh8000};
             bins zeros  = {16'sh0000};
             bins ones   = {16'shFFFF};
@@ -166,29 +164,27 @@
         oc        = new();
         corners_c = new();
 	    parity_c  = new();
-	    cov_valid_counter = 1'b0;
+	    valid_counter = 1'b0;
         forever begin : sampling_block
             @(posedge bfm.clk);
-	        data_in_packet = bfm.data_in_packet;
-	        op_set         = bfm.op_set;
 	        /* sample data only when both inputs are correctly latched */
-	        priority if (bfm.data_in_valid == 1'b1 && cov_valid_counter == 1'b0) begin
+	        priority if (bfm.data_in_valid == 1'b1 && valid_counter == 1'b0) begin
 		        // wait for data B to be latched
-	            cov_valid_counter = 1'b1; 
+	            valid_counter = 1'b1; 
 	        end
-	        else if (bfm.data_in_valid == 1'b1 && cov_valid_counter == 1'b1) begin
-	            parity_corr = check_parity_cov(data_in_packet);
+	        else if (bfm.data_in_valid == 1'b1 && valid_counter == 1'b1) begin
+	            parity_corr = check_parity_cov(bfm.data_in_packet);
 	            oc.sample();
 	            corners_c.sample();
 		        parity_c.sample();
-		        cov_valid_counter = 1'b0;		
+		        valid_counter = 1'b0;		
 	        end
 	        else begin
-		        cov_valid_counter = cov_valid_counter;
+		        valid_counter = valid_counter;
 	        end
 	        /* additionally sample operation at the reset occurence */
 	        if (bfm.rst_n == 1'b0) begin
-		        cov_valid_counter = 1'b0;
+		        valid_counter = 1'b0;
 		        oc.sample();
 	        end
         end : sampling_block

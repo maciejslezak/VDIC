@@ -45,7 +45,7 @@ module scoreboard(fifomult2024_bfm bfm);
 // local variables
 //------------------------------------------------------------------------------
 
-	bit	            sb_valid_counter = 1'b0;
+	bit	            valid_counter = 1'b0;
 	test_result_t	test_result = TEST_PASSED;
 
 //------------------------------------------------------------------------------
@@ -96,18 +96,18 @@ module scoreboard(fifomult2024_bfm bfm);
 
     always @(posedge bfm.clk) begin:scoreboard_fe_blk
 	    /* sample data only after two consecutive 'valid' signal occurences */
-        priority if (bfm.data_in_valid == 1'b1 && sb_valid_counter == 1'b0) begin
-            sb_valid_counter = 1'b1; 
+        priority if (bfm.data_in_valid == 1'b1 && valid_counter == 1'b0) begin
+            valid_counter = 1'b1; 
         end
-        else if (bfm.data_in_valid == 1'b1 && sb_valid_counter == 1'b1) begin
+        else if (bfm.data_in_valid == 1'b1 && valid_counter == 1'b1) begin
             sb_data_q.push_front(bfm.data_in_packet);
-	        sb_valid_counter = 1'b0;		
+	        valid_counter = 1'b0;		
         end
         else begin
-	        sb_valid_counter = sb_valid_counter;
+	        valid_counter = valid_counter;
         end
         if (bfm.rst_n == 1'b0) begin
-	        sb_valid_counter = 1'b0;
+	        valid_counter = 1'b0;
 	        sb_data_q.delete();
         end
     end
