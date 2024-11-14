@@ -28,6 +28,12 @@ function real get_distance(point_st point0, point_st point1);
 	return distance;
 endfunction : get_distance
 
+/* abs_real() - calculate abs for real values */
+function real abs_real(real value);
+	if (value < 0) return -value;
+	else return value;
+endfunction : abs_real
+
 /* ------------------------------------------------------------------------ */
 /* class definitions ------------------------------------------------------ */
 /* ------------------------------------------------------------------------ */
@@ -141,12 +147,6 @@ class triangle_c extends polygon_c;
 		super.new(name, points);
 	endfunction : new
 	
-	/* abs_real() - calculate abs for real values */
-	function real abs_real(real value);
-		if (value < 0) return -value;
-		else return value;
-	endfunction : abs_real
-		
 	/* get_area() - calculate area */
 	function real get_area();
 		return abs_real((points[1].x - points[0].x) * (points[2].y - points[0].y) - (points[2].x - points[0].x) * (points[1].y - points[0].y))*0.5;	
@@ -216,7 +216,6 @@ module top;
 	string line;
 	string temp_string = "";
 	int j = 0;
-	real temp_x, temp_y;
 	point_st temp_point;
 	point_st points[$];
 	
@@ -265,10 +264,6 @@ module top;
 			/* generate shape */
 			case (points.size())
 				2 : begin
-					//$display("CIRCLE");
-					//foreach (points[p]) begin
-					//	$display("%0.2f %0.2f", points[p].x, points[p].y);
-					//end
 					/* create circle */
 					if (!$cast(circle_h, shape_factory::make_shape("circle", points)))
 						$fatal(1, "Failed to cast shape from factory to circle_h");
@@ -286,10 +281,6 @@ module top;
 					/* check if rectangle */
 					automatic real side_len			= get_distance(points[0], points[2]);
 					automatic real opposed_side_len	= get_distance(points[1], points[3]);
-					//$display("RECTANGLE OR POLYGON");
-					//foreach (points[p]) begin
-					//	$display("%0.2f %0.2f", points[p].x, points[p].y);
-					//end
 					if (side_len == opposed_side_len) begin
 						/* create rectangle */
 						if (!$cast(rectangle_h, shape_factory::make_shape("rectangle", points)))
