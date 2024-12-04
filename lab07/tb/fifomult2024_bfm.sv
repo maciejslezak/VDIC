@@ -1,0 +1,189 @@
+/*
+ Copyright 2013 Ray Salemi
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+ http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+ 
+ Last modification: 2024-11-05 AGH MSle
+ */
+interface fifomult2024_bfm;
+
+//------------------------------------------------------------------------------
+// imports  
+//------------------------------------------------------------------------------
+	import fifomult2024_tb_pkg::*;
+
+//------------------------------------------------------------------------------
+// dut connections
+//------------------------------------------------------------------------------
+	// dut control signals
+	bit clk;
+	bit rst_n;
+	// dut data in signals
+	bit signed [15:0] data_in;
+	bit               data_in_parity;
+	bit               data_in_valid;
+	// dut data out signals
+    bit               busy_out;
+    bit signed [31:0] data_out;
+    bit               data_out_parity;
+    bit               data_out_valid;
+    bit               data_in_parity_error;
+	//st_data_in_packet_t data_in_packet;
+	operation_t         op;	
+//------------------------------------------------------------------------------
+// local variables
+//------------------------------------------------------------------------------
+	
+	command_s command_q[$];
+	command_s cmd;
+	bit valid_counter = 0;
+	
+	command_monitor	command_monitor_h;
+	result_monitor	result_monitor_h;
+	
+//------------------------------------------------------------------------------
+// modport definition  
+//------------------------------------------------------------------------------
+	//modport tlm (import reset_dut, send_data);
+	
+//------------------------------------------------------------------------------
+// reset task
+//------------------------------------------------------------------------------
+
+	task reset_dut();
+	`ifdef DEBUG
+		$display("%0t DEBUG: reset_dut", $time);
+	`endif
+		data_in_valid = 1'b0;
+		rst_n         = 1'b0;
+		@(negedge clk);
+		rst_n         = 1'b1;
+	endtask : reset_dut
+
+//------------------------------------------------------------------------------
+// send transaction to DUT
+//------------------------------------------------------------------------------
+
+	task send_op(	input bit signed [15:0] iA,
+					input bit               iA_parity,
+					input bit signed [15:0] iB,
+					input bit               iB_parity,
+					input operation_t iop);
+		
+		valid_counter = 0;	
+		
+		while (1) begin : sender_loop
+			/* --- latch data in A --- */
+			priority if (busy_out == 1'b0 && valid_counter == 1'b0) begin
+				/* latch A */
+				data_in             = iA;
+				data_in_parity      = iA_parity;
+				valid_counter       = 1'b1;
+				data_in_valid       = 1'b1;
+				@(negedge clk);
+			end
+			else if (busy_out == 1'b0 && valid_counter == 1'b1) begin
+				data_in             = iB;
+				data_in_parity      = iB_parity;
+				valid_counter       = 1'b0;
+				data_in_valid       = 1'b1;
+				command_q.push_front('{iA,iA_parity,iB,iB_parity,iop});
+				@(negedge clk);
+				/* exit loop if both multiplicands were sent */
+				break;
+			end
+			else begin
+				data_in             = data_in;
+				data_in_parity      = data_in_parity;
+				valid_counter       = valid_counter;
+				data_in_valid       = 1'b0;
+				@(negedge clk);
+			end
+			/* --- handle operation --- */
+			case (iop)
+				rst_op: begin : case_rst_op_blk
+					/* --- reset dut--- */
+					//command.delete();
+					reset_dut();
+					valid_counter = 1'b0;
+					/* exit loop if reset */
+					break;
+				end
+				default: begin : case_default_blk
+					/* --- send data --- */
+					data_in_valid = data_in_valid;
+				end : case_default_blk
+			endcase // case (op_set)
+		end : sender_loop
+	endtask : send_op
+
+//------------------------------------------------------------------------------
+// convert binary op code to enum
+//------------------------------------------------------------------------------
+
+function operation_t op2enum();
+    operation_t opi;
+    if( ! $cast(opi,op) )
+        $fatal(1, "Illegal operation on op bus");
+    return opi;
+endfunction : op2enum
+
+//------------------------------------------------------------------------------
+// write command monitor
+//------------------------------------------------------------------------------
+
+always @(posedge clk) begin : op_monitor
+	if (!rst_n) begin
+		/* send command so the coverage can sample reset */
+		command_monitor_h.write_to_monitor(0,0,0,0,rst_op);
+		command_q.delete();
+	end
+	else if (data_out_valid) begin
+		cmd = command_q.pop_back();
+		command_monitor_h.write_to_monitor(cmd.A, cmd.A_parity, cmd.B, cmd.B_parity, cmd.op);
+	end
+end
+
+//------------------------------------------------------------------------------
+// write result monitor
+//------------------------------------------------------------------------------
+
+initial begin : result_monitor_thread
+    forever begin
+        @(posedge clk);
+        if (data_out_valid) begin
+            result_monitor_h.write_to_monitor(data_out, data_out_parity, data_in_parity_error);
+        end
+    end
+end : result_monitor_thread
+
+//------------------------------------------------------------------------------
+// clock generator  
+//------------------------------------------------------------------------------	
+
+	initial begin : clk_gen_blk
+		clk = 0;
+		forever begin : clk_frv_blk
+			#10;
+			clk = ~clk;
+		end
+	end
+
+	initial
+		$timeformat(-12, 0, " ps", 20);
+	
+endinterface : fifomult2024_bfm
+
+
+
+

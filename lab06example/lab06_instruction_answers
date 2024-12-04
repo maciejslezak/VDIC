@@ -1,4 +1,4 @@
-a) Which objects in the diagram instantiate which?
+﻿a) Which objects in the diagram instantiate which?
 	o random_test instantiates env_h.
 	o env_h instantiates:
 		* tpgen_h,

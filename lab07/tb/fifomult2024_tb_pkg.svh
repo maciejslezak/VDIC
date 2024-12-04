@@ -26,12 +26,28 @@ package fifomult2024_tb_pkg;
 	} operation_t;
 	
 	/* data in packet */
+//	typedef struct {
+//		bit signed [15:0] A;
+//		bit               A_parity;
+//		bit signed [15:0] B;
+//		bit               B_parity;		
+//	} st_data_in_packet_t;
+	
+	/* data out packet */
+	typedef struct {
+		bit signed [31:0] data_out;
+		bit               data_out_parity;
+		bit               data_in_parity_error;
+	} st_data_out_packet_t;
+	
+	/* command packet */
 	typedef struct {
 		bit signed [15:0] A;
 		bit               A_parity;
 		bit signed [15:0] B;
 		bit               B_parity;		
-	} st_data_in_packet_t;	
+		operation_t			op;
+	} command_s;
 
     // terminal print colors
     typedef enum {
@@ -69,12 +85,16 @@ package fifomult2024_tb_pkg;
 //------------------------------------------------------------------------------
 // testbench classes
 //------------------------------------------------------------------------------
-   
+
+`include "command_transaction.svh"
+`include "corner_command_transaction.svh"
+`include "result_transaction.svh"
 `include "coverage.svh"
 `include "scoreboard.svh"
-`include "base_tpgen.svh"
-`include "random_tpgen.svh"
-`include "corner_tpgen.svh"
+`include "tpgen.svh"
+`include "driver.svh"
+`include "command_monitor.svh"
+`include "result_monitor.svh"
 `include "env.svh"
 
 //------------------------------------------------------------------------------
