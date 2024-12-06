@@ -83,12 +83,12 @@ class command_transaction extends uvm_transaction;
         if (!$cast(compared_transaction_h,rhs))
             same = 0;
         else
-            same = super.do_compare(rhs, comparer) &&
-            (compared_transaction_h.A == A) &&
+            same = super.do_compare(rhs, comparer)        &&
+            (compared_transaction_h.A        == A)        &&
             (compared_transaction_h.A_parity == A_parity) &&
-            (compared_transaction_h.B == B) &&
+            (compared_transaction_h.B        == B)        &&
             (compared_transaction_h.B_parity == B_parity) &&
-            (compared_transaction_h.op == op);
+            (compared_transaction_h.op       == op);
 
         return same;
         
