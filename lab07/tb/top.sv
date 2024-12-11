@@ -39,5 +39,3 @@ initial begin
 end
 
 endmodule : top
-
-

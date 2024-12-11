@@ -25,6 +25,13 @@ package fifomult2024_tb_pkg;
 		rst_op = 1'b1
 	} operation_t;
 	
+	typedef struct {
+		bit signed [15:0] A;
+		bit               A_parity;
+		bit signed [15:0] B;
+		bit               B_parity;		
+	} st_data_in_packet_t;
+	
 	/* data out packet */
 	typedef struct {
 		bit signed [31:0] data_out;
@@ -78,21 +85,28 @@ package fifomult2024_tb_pkg;
 // testbench classes
 //------------------------------------------------------------------------------
 
+// configs
+`include "env_config.svh"
+`include "fifomult2024_agent_config.svh"
+
+// transactions
 `include "command_transaction.svh"
 `include "corner_command_transaction.svh"
 `include "result_transaction.svh"
+
+// testbench components
 `include "coverage.svh"
 `include "scoreboard.svh"
 `include "tpgen.svh"
 `include "driver.svh"
 `include "command_monitor.svh"
 `include "result_monitor.svh"
+`include "fifomult2024_agent.svh"
 `include "env.svh"
 
 //------------------------------------------------------------------------------
 // test classes
 //------------------------------------------------------------------------------
-`include "random_test.svh"
-`include "corner_test.svh"
+`include "dual_test.svh"
 
 endpackage : fifomult2024_tb_pkg
